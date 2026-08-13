@@ -302,8 +302,30 @@ const fetchDashboardData = async (period: FilterPeriod): Promise<void> => {
 
     try {
         const response = await bpService.getReadingsByRange(startStr, endStr);
-        recentLogs.value = response.data;
-        buildChart(response.data);
+        const data: BpReading[] = response.data || [];
+
+        // Define strict chronological rank for time slots
+        const timeOrder: Record<string, number> = {
+            'MORNING': 1,
+            'AFTERNOON': 2,
+            'EVENING': 3
+        };
+
+        // Sort data: Latest date first, then Morning -> Afternoon -> Evening within the same date
+        const sortedData = [...data].sort((a, b) => {
+            // 1. Compare dates descending (newest dates on top)
+            if (a.readingDate !== b.readingDate) {
+                return b.readingDate.localeCompare(a.readingDate);
+            }
+            
+            // 2. Compare timeOfDay ascending (Morning -> Afternoon -> Evening)
+            const orderA = timeOrder[a.timeOfDay] ?? 4;
+            const orderB = timeOrder[b.timeOfDay] ?? 4;
+            return orderA - orderB;
+        });
+
+        recentLogs.value = sortedData;
+        buildChart(sortedData);
     } catch (error) {
         console.error('Error loading BP data:', error);
     }
