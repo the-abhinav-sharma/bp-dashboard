@@ -5,7 +5,7 @@
             <div class="header-content">
                 <div class="header-badge">CardioCare Tracker</div>
                 <h1>Blood Pressure & Pulse Dashboard</h1>
-                <p>Log daily morning/evening readings and monitor your cardiovascular trends.</p>
+                <p>Log daily morning/afternoon/evening readings and monitor your cardiovascular trends.</p>
             </div>
         </header>
 
@@ -41,6 +41,7 @@
                             <label>Time of Day</label>
                             <select v-model="form.timeOfDay">
                                 <option value="MORNING">☀️ Morning</option>
+                                <option value="AFTERNOON">🌤️ Afternoon</option>
                                 <option value="EVENING">🌙 Evening</option>
                             </select>
                         </div>
@@ -56,14 +57,24 @@
                         <input type="text" v-model="form.notes" placeholder="e.g. Post-workout, felt rested" />
                     </div>
 
-                    <!-- Status Indicator Card -->
-                    <div class="status-preview-card"
-                        :style="{ backgroundColor: currentStatus.bg, borderColor: currentStatus.pointColor }">
-                        <div class="status-info">
-                            <span class="status-label-text">Current Classification</span>
-                            <span class="badge" :style="{ color: currentStatus.color }">
-                                {{ currentStatus.label }}
-                            </span>
+                    <!-- Split Status Indicator Card with Individual Dynamic Colors -->
+                    <div class="status-preview-card">
+                        <div class="status-info-split">
+                            <div class="split-item" 
+                                :style="{ backgroundColor: currentStatus.systolicStatus.bg, borderColor: currentStatus.systolicStatus.pointColor }">
+                                <span class="status-label-text">Systolic</span>
+                                <span class="badge" :style="{ color: currentStatus.systolicStatus.color }">
+                                    {{ currentStatus.systolicStatus.label }}
+                                </span>
+                            </div>
+                            
+                            <div class="split-item" 
+                                :style="{ backgroundColor: currentStatus.diastolicStatus.bg, borderColor: currentStatus.diastolicStatus.pointColor }">
+                                <span class="status-label-text">Diastolic</span>
+                                <span class="badge" :style="{ color: currentStatus.diastolicStatus.color }">
+                                    {{ currentStatus.diastolicStatus.label }}
+                                </span>
+                            </div>
                         </div>
                     </div>
 
@@ -122,19 +133,23 @@
                             <td class="date-cell">{{ item.readingDate }}</td>
                             <td>
                                 <span class="time-tag" :class="item.timeOfDay.toLowerCase()">
-                                    {{ item.timeOfDay === 'MORNING' ? '☀️ Morning' : '🌙 Evening' }}
+                                    {{ item.timeOfDay === 'MORNING' ? '☀️ Morning' : item.timeOfDay === 'AFTERNOON' ? '🌤️ Afternoon' : '🌙 Evening' }}
                                 </span>
                             </td>
                             <td>
-                                <span class="bp-value"><strong>{{ item.systolic }}</strong> / {{ item.diastolic
-                                    }}</span>
+                                <span class="bp-value"><strong>{{ item.systolic }}</strong> / {{ item.diastolic }}</span>
                                 <small class="unit"> mmHg</small>
                             </td>
                             <td><strong>{{ item.pulse }}</strong> <small class="unit">BPM</small></td>
                             <td>
-                                <span class="badge-pill" :style="getStatusStyle(item.systolic, item.diastolic)">
-                                    {{ classifyBp(item.systolic, item.diastolic).label }}
-                                </span>
+                                <div class="table-badges">
+                                    <span class="badge-pill" :style="{ backgroundColor: classifyBp(item.systolic, item.diastolic).systolicStatus.bg, color: classifyBp(item.systolic, item.diastolic).systolicStatus.color }">
+                                        SYS: {{ classifyBp(item.systolic, item.diastolic).systolicStatus.label }}
+                                    </span>
+                                    <span class="badge-pill" :style="{ backgroundColor: classifyBp(item.systolic, item.diastolic).diastolicStatus.bg, color: classifyBp(item.systolic, item.diastolic).diastolicStatus.color }">
+                                        DIA: {{ classifyBp(item.systolic, item.diastolic).diastolicStatus.label }}
+                                    </span>
+                                </div>
                             </td>
                             <td class="notes-cell">{{ item.notes || '-' }}</td>
                         </tr>
@@ -151,7 +166,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
 import bpService from '../services/bpService.ts';
-import type { BpReading, BpStatus, FilterPeriod } from '../types/bp.ts';
+import type { BpReading, BpStatus, FilterPeriod, SingleCategory } from '../types/bp.ts';
 import {
     Chart as ChartJS, Title, Tooltip, Legend, LineElement, CategoryScale, LinearScale, PointElement,
     type ChartData, type ChartOptions
@@ -182,25 +197,43 @@ const chartData = ref<ChartData<'line'>>({
     datasets: []
 });
 
-const classifyBp = (systolic: number | null, diastolic: number | null): BpStatus => {
-    if (systolic === null || diastolic === null || !systolic || !diastolic) {
+const classifyValue = (val: number | null, type: 'systolic' | 'diastolic'): SingleCategory => {
+    if (val === null || !val) {
         return { label: 'Pending', color: '#64748b', bg: '#f1f5f9', pointColor: '#64748b' };
     }
-    if (systolic >= 140 || diastolic >= 90) {
-        return { label: 'Very High', color: '#991b1b', bg: '#fee2e2', pointColor: '#dc2626' };
+
+    if (type === 'systolic') {
+        if (val >= 180) return { label: 'Critically High', color: '#7f1d1d', bg: '#fecaca', pointColor: '#991b1b' };
+        if (val >= 140) return { label: 'High', color: '#991b1b', bg: '#fee2e2', pointColor: '#dc2626' };
+        if (val > 120) return { label: 'Slightly High', color: '#854d0e', bg: '#fef9c3', pointColor: '#d97706' };
+        return { label: 'Normal', color: '#166534', bg: '#dcfce7', pointColor: '#16a34a' };
+    } else {
+        if (val >= 120) return { label: 'Critically High', color: '#7f1d1d', bg: '#fecaca', pointColor: '#991b1b' };
+        if (val >= 90) return { label: 'High', color: '#991b1b', bg: '#fee2e2', pointColor: '#dc2626' };
+        if (val > 80) return { label: 'Slightly High', color: '#854d0e', bg: '#fef9c3', pointColor: '#d97706' };
+        return { label: 'Normal', color: '#166534', bg: '#dcfce7', pointColor: '#16a34a' };
     }
-    if (systolic >= 120 || diastolic >= 80) {
-        return { label: 'High', color: '#92400e', bg: '#fef3c7', pointColor: '#d97706' };
-    }
-    return { label: 'Normal', color: '#166534', bg: '#dcfce7', pointColor: '#16a34a' };
+};
+
+const classifyBp = (systolic: number | null, diastolic: number | null): BpStatus => {
+    const sysCat = classifyValue(systolic, 'systolic');
+    const diaCat = classifyValue(diastolic, 'diastolic');
+
+    const priorityOrder = ['Critically High', 'High', 'Slightly High', 'Normal', 'Pending'];
+    const highestLabel = priorityOrder.find(
+        p => p === sysCat.label || p === diaCat.label
+    ) || 'Normal';
+
+    const overall = sysCat.label === highestLabel ? sysCat : diaCat;
+
+    return {
+        ...overall,
+        systolicStatus: sysCat,
+        diastolicStatus: diaCat
+    };
 };
 
 const currentStatus = computed<BpStatus>(() => classifyBp(form.systolic, form.diastolic));
-
-const getStatusStyle = (sys: number | null, dia: number | null) => {
-    const status = classifyBp(sys, dia);
-    return { backgroundColor: status.bg, color: status.color };
-};
 
 const chartOptions: ChartOptions<'line'> = {
     responsive: true,
@@ -236,7 +269,6 @@ const handleFormSubmit = async (): Promise<void> => {
         isSubmitting.value = true;
         await bpService.logReading(form);
 
-        // Reset inputs to null after saving
         form.systolic = null;
         form.diastolic = null;
         form.pulse = null;
@@ -277,7 +309,6 @@ const fetchDashboardData = async (period: FilterPeriod): Promise<void> => {
     }
 };
 
-// Helper: safe calculation of rounded averages
 const avg = (arr: number[]): number => {
     if (!arr.length) return 0;
     return Math.round(arr.reduce((sum, val) => sum + val, 0) / arr.length);
@@ -305,15 +336,15 @@ const buildChart = (rawData: BpReading[]): void => {
     let aggregatedData: AggregatedReading[] = [];
 
     if (activePeriod.value === 'daily' || activePeriod.value === 'weekly') {
-        // 1. Daily/Weekly: Keep raw slots (AM/PM separate)
         aggregatedData = rawData.map((item) => {
             const [year, month, day] = item.readingDate.split('-').map(Number);
             const date = new Date(year, month - 1, day);
-            const timeAbbr = item.timeOfDay === 'MORNING' ? 'AM' : 'PM';
+            const timeAbbr = item.timeOfDay === 'MORNING' ? 'AM' : item.timeOfDay === 'AFTERNOON' ? 'PM' : 'Eve';
 
             let label = item.readingDate;
             if (activePeriod.value === 'daily') {
-                label = item.timeOfDay === 'MORNING' ? '☀️ Morning' : '🌙 Evening';
+                label = item.timeOfDay === 'MORNING' ? '☀️ Morning' : 
+                        item.timeOfDay === 'AFTERNOON' ? '🌤️ Afternoon' : '🌙 Evening';
             } else {
                 const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
                 label = `${dayName} ${day} (${timeAbbr})`;
@@ -328,7 +359,6 @@ const buildChart = (rawData: BpReading[]): void => {
         });
     }
     else if (activePeriod.value === 'monthly') {
-        // 2. Monthly: Group by Date (YYYY-MM-DD) -> Average per Day
         const groupedByDay = new Map<string, GroupBucket>();
 
         rawData.forEach((item) => {
@@ -356,11 +386,10 @@ const buildChart = (rawData: BpReading[]): void => {
         });
     }
     else if (activePeriod.value === 'yearly') {
-        // 3. Yearly: Group by Month (YYYY-MM) -> Average per Month
         const groupedByMonth = new Map<string, GroupBucket>();
 
         rawData.forEach((item) => {
-            const monthKey = item.readingDate.slice(0, 7); // "YYYY-MM"
+            const monthKey = item.readingDate.slice(0, 7);
             if (!groupedByMonth.has(monthKey)) {
                 groupedByMonth.set(monthKey, { sys: [], dia: [], pulse: [] });
             }
@@ -374,7 +403,8 @@ const buildChart = (rawData: BpReading[]): void => {
         groupedByMonth.forEach((values, monthKey) => {
             const [year, month] = monthKey.split('-').map(Number);
             const date = new Date(year, month - 1, 1);
-            const formattedLabel = date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+            // Change year: '2-digit' to year: 'numeric'
+            const formattedLabel = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 
             aggregatedData.push({
                 label: formattedLabel,
@@ -385,7 +415,6 @@ const buildChart = (rawData: BpReading[]): void => {
         });
     }
 
-    // Extract datasets and map dynamic point colors
     const labels = aggregatedData.map((d) => d.label);
     const pointColors = aggregatedData.map((d) => classifyBp(d.systolic, d.diastolic).pointColor);
 
@@ -540,19 +569,17 @@ onMounted(() => {
     color: #94a3b8;
 }
 
-/* Unified baseline styling for all inputs and select fields */
+/* Unified baseline styling for inputs and selects */
 .form-group input,
 .form-group select {
     box-sizing: border-box;
     width: 100%;
     max-width: 100%;
     height: 44px;
-    /* Strict height lock to ensure identical sizes */
     padding: 0 12px;
     border: 1px solid #cbd5e1;
     border-radius: 8px;
     font-size: 16px;
-    /* Prevents auto-zoom on iOS Safari */
     line-height: 44px;
     outline: none;
     background-color: #f8fafc;
@@ -579,7 +606,6 @@ onMounted(() => {
     padding-bottom: 0 !important;
 }
 
-/* Fixes vertical text shift inside iOS Safari shadow DOM wrapper */
 .form-group input[type="date"]::-webkit-date-and-time-value {
     display: flex;
     align-items: center;
@@ -590,7 +616,6 @@ onMounted(() => {
     text-align: left;
 }
 
-/* Normalizes calendar picker icon sizing and position on WebKit */
 .form-group input[type="date"]::-webkit-calendar-picker-indicator {
     display: block;
     background-size: 16px;
@@ -598,25 +623,38 @@ onMounted(() => {
     opacity: 0.6;
 }
 
+/* Container for split preview */
 .status-preview-card {
-    padding: 12px 14px;
-    border-radius: 10px;
-    border-left: 4px solid;
-    transition: all 0.2s ease;
-    box-sizing: border-box;
     width: 100%;
+    box-sizing: border-box;
 }
 
-.status-info {
+.status-info-split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+/* Individual boxes that dynamically change background & border colors */
+.split-item {
     display: flex;
-    justify-content: space-between;
+    flex-direction: column;
     align-items: center;
+    gap: 4px;
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid;
+    border-left-width: 4px; /* Distinct visual indicator on left edge */
+    transition: all 0.2s ease;
+    box-sizing: border-box;
 }
 
 .status-label-text {
-    font-size: 12px;
+    font-size: 11px;
     color: #475569;
     font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .badge {
@@ -757,9 +795,20 @@ onMounted(() => {
     color: #92400e;
 }
 
+.time-tag.afternoon {
+    background: #e0f2fe;
+    color: #0369a1;
+}
+
 .time-tag.evening {
     background: #e0e7ff;
     color: #3730a3;
+}
+
+.table-badges {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
 
 .badge-pill {
@@ -781,7 +830,7 @@ onMounted(() => {
     padding: 24px;
 }
 
-/* Breakpoint Fixes for Larger Mobile / Tablet / Desktop */
+/* Breakpoint Fixes */
 @media (min-width: 480px) {
     .form-row {
         display: grid;
