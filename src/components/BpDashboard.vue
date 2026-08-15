@@ -304,28 +304,34 @@ const fetchDashboardData = async (period: FilterPeriod): Promise<void> => {
         const response = await bpService.getReadingsByRange(startStr, endStr);
         const data: BpReading[] = response.data || [];
 
-        // Define strict chronological rank for time slots
         const timeOrder: Record<string, number> = {
             'MORNING': 1,
             'AFTERNOON': 2,
             'EVENING': 3
         };
 
-        // Sort data: Latest date first, then Morning -> Afternoon -> Evening within the same date
-        const sortedData = [...data].sort((a, b) => {
-            // 1. Compare dates descending (newest dates on top)
+        // Table Data: Newest dates at the top, Morning -> Evening within each day
+        const tableSortedData = [...data].sort((a, b) => {
             if (a.readingDate !== b.readingDate) {
                 return b.readingDate.localeCompare(a.readingDate);
             }
-            
-            // 2. Compare timeOfDay ascending (Morning -> Afternoon -> Evening)
             const orderA = timeOrder[a.timeOfDay] ?? 4;
             const orderB = timeOrder[b.timeOfDay] ?? 4;
             return orderA - orderB;
         });
 
-        recentLogs.value = sortedData;
-        buildChart(sortedData);
+        // Chart Data: Oldest dates on the left, Morning -> Evening within each day
+        const chartSortedData = [...data].sort((a, b) => {
+            if (a.readingDate !== b.readingDate) {
+                return a.readingDate.localeCompare(b.readingDate); // Ascending date
+            }
+            const orderA = timeOrder[a.timeOfDay] ?? 4;
+            const orderB = timeOrder[b.timeOfDay] ?? 4;
+            return orderA - orderB;
+        });
+
+        recentLogs.value = tableSortedData;
+        buildChart(chartSortedData);
     } catch (error) {
         console.error('Error loading BP data:', error);
     }
@@ -361,7 +367,10 @@ const buildChart = (rawData: BpReading[]): void => {
         aggregatedData = rawData.map((item) => {
             const [year, month, day] = item.readingDate.split('-').map(Number);
             const date = new Date(year, month - 1, day);
-            const timeAbbr = item.timeOfDay === 'MORNING' ? 'AM' : item.timeOfDay === 'AFTERNOON' ? 'PM' : 'Eve';
+            
+            // Updated custom abbreviations for slot tags
+            const timeAbbr = item.timeOfDay === 'MORNING' ? 'Morn' : 
+                             item.timeOfDay === 'AFTERNOON' ? 'Aft' : 'Eve';
 
             let label = item.readingDate;
             if (activePeriod.value === 'daily') {
@@ -369,6 +378,7 @@ const buildChart = (rawData: BpReading[]): void => {
                         item.timeOfDay === 'AFTERNOON' ? '🌤️ Afternoon' : '🌙 Evening';
             } else {
                 const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+                // Displays as: "Mon 15 (Morn)"
                 label = `${dayName} ${day} (${timeAbbr})`;
             }
 
