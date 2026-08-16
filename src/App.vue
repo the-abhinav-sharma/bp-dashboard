@@ -1,10 +1,9 @@
 <template>
-  <BpDashboard />
+  <router-view />
 </template>
 
 <script setup lang="ts">
-// Explicitly include .vue for Vue component files
-import BpDashboard from './components/BpDashboard.vue';
+// No component imports needed here — Vue Router handles rendering based on the active route
 </script>
 
 <style>
