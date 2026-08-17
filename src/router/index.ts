@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import authService from '@/services/authService';
 import LoginView from '@/components/LoginView.vue';
+import RegisterView from '@/components/RegisterView.vue';
 import DashboardView from '@/components/BpDashboard.vue';
 
 const routes = [
@@ -10,10 +11,15 @@ const routes = [
     component: LoginView 
   },
   { 
+    path: '/register', 
+    name: 'Register', 
+    component: RegisterView 
+  },
+  { 
     path: '/dashboard', 
     name: 'Dashboard', 
     component: DashboardView, 
-    meta: { requiresAuth: true } // 👈 Must be present
+    meta: { requiresAuth: true }
   },
   { 
     path: '/', 
@@ -33,8 +39,8 @@ router.beforeEach((to, from, next) => {
   if (to.meta.requiresAuth && !authenticated) {
     // If route requires auth and user is NOT logged in -> redirect to /login
     next('/login');
-  } else if (to.path === '/login' && authenticated) {
-    // If user is already logged in and tries to go to /login -> redirect to /dashboard
+  } else if ((to.path === '/login' || to.path === '/register') && authenticated) {
+    // If user is already logged in and tries to go to login/register -> redirect to /dashboard
     next('/dashboard');
   } else {
     next(); // Proceed as normal

@@ -89,6 +89,11 @@ const handleLogin = async () => {
           <span v-else>Sign In</span>
         </button>
       </form>
+      <div class="auth-footer">
+        <p>Don't have an account? 
+          <router-link to="/register" class="auth-link">Sign Up</router-link>
+        </p>
+      </div>
     </div>
   </div>
 </template>
@@ -265,5 +270,25 @@ const handleLogin = async () => {
   0% { stroke-dasharray: 1, 150; stroke-dashoffset: 0; }
   50% { stroke-dasharray: 90, 150; stroke-dashoffset: -35; }
   100% { stroke-dasharray: 90, 150; stroke-dashoffset: -124; }
+}
+
+.auth-footer {
+  margin-top: 1.5rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: #64748b;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 1.25rem;
+}
+
+.auth-link {
+  color: #2563eb;
+  font-weight: 600;
+  text-decoration: none;
+  margin-left: 0.25rem;
+}
+
+.auth-link:hover {
+  text-decoration: underline;
 }
 </style>
