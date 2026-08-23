@@ -11,31 +11,31 @@ export interface BpLog {
   notes?: string;
 }
 
-// Safely parse date strings or objects without UTC timezone shifts
+// Safely parse date strings or objects
 const parseLogDate = (dateVal: string | Date): Date => {
   if (dateVal instanceof Date) return dateVal;
   if (typeof dateVal === 'string' && dateVal.includes('T')) {
     return new Date(dateVal);
   }
-  // Replace hyphens to avoid UTC interpretation for YYYY-MM-DD
   return new Date(String(dateVal).replace(/-/g, '/'));
 };
 
-// Group logs into distinct, non-overlapping date ranges
+// Group logs into cumulative timeframes (7 days, 30 days, 365 days)
 const groupLogsByTimeframe = (logs: BpLog[]) => {
   const now = new Date();
-  
-  // Set boundary thresholds (at midnight for clean day comparisons)
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
 
-  const sevenDaysAgo = new Date(today);
-  sevenDaysAgo.setDate(today.getDate() - 7);
+  // Set cutoff boundaries at the absolute BEGINNING of the target day (00:00:00)
+  const sevenDaysAgo = new Date(now);
+  sevenDaysAgo.setDate(now.getDate() - 7);
+  sevenDaysAgo.setHours(0, 0, 0, 0);
 
-  const thirtyDaysAgo = new Date(today);
-  thirtyDaysAgo.setDate(today.getDate() - 30);
+  const thirtyDaysAgo = new Date(now);
+  thirtyDaysAgo.setDate(now.getDate() - 30);
+  thirtyDaysAgo.setHours(0, 0, 0, 0);
 
-  const oneYearAgo = new Date(today);
-  oneYearAgo.setDate(today.getDate() - 365);
+  const oneYearAgo = new Date(now);
+  oneYearAgo.setDate(now.getDate() - 365);
+  oneYearAgo.setHours(0, 0, 0, 0);
 
   // Sort logs descending (newest first)
   const sortedLogs = [...logs].sort(
@@ -43,21 +43,12 @@ const groupLogsByTimeframe = (logs: BpLog[]) => {
   );
 
   return {
-    // Last 7 days
-    weekly: sortedLogs.filter((l) => {
-      const d = parseLogDate(l.readingDate);
-      return d >= sevenDaysAgo;
-    }),
-    // Days 8 to 30 (Older than 7 days, up to 30 days)
-    monthly: sortedLogs.filter((l) => {
-      const d = parseLogDate(l.readingDate);
-      return d < sevenDaysAgo && d >= thirtyDaysAgo;
-    }),
-    // Days 31 to 365 (Older than 30 days, up to 1 year)
-    yearly: sortedLogs.filter((l) => {
-      const d = parseLogDate(l.readingDate);
-      return d < thirtyDaysAgo && d >= oneYearAgo;
-    }),
+    // All logs from the last 7 days
+    weekly: sortedLogs.filter((l) => parseLogDate(l.readingDate) >= sevenDaysAgo),
+    // All logs from the last 30 days (Includes Aug 12 - Aug 23)
+    monthly: sortedLogs.filter((l) => parseLogDate(l.readingDate) >= thirtyDaysAgo),
+    // All logs from the last 365 days (Includes Aug 12 - Aug 23)
+    yearly: sortedLogs.filter((l) => parseLogDate(l.readingDate) >= oneYearAgo),
   };
 };
 
@@ -87,16 +78,14 @@ export const generateBpPdf = (
     doc.text('Blood Pressure Trends (Visual Chart)', 14, currentY);
     currentY += 4;
 
-    // Add Image (x, y, width, height)
     doc.addImage(chartBase64Image, 'PNG', 14, currentY, 180, 75);
     currentY += 82;
   }
 
-  // 2. Group Data into distinct buckets
+  // 2. Group Data
   const grouped = groupLogsByTimeframe(logs);
 
   const renderSectionTable = (title: string, data: BpLog[]) => {
-    // Add page break if running out of space
     if (currentY > 230) {
       doc.addPage();
       currentY = 15;
@@ -144,11 +133,10 @@ export const generateBpPdf = (
     currentY = (doc as any).lastAutoTable.finalY + 10;
   };
 
-  // Render distinct non-overlapping sections
-  renderSectionTable('Recent Readings (Past 7 Days)', grouped.weekly);
-  renderSectionTable('Earlier This Month (8 to 30 Days Ago)', grouped.monthly);
-  renderSectionTable('Older History (31 Days to 1 Year Ago)', grouped.yearly);
+  // Render cumulative sections
+  renderSectionTable('Past 7 Days (Weekly)', grouped.weekly);
+  renderSectionTable('Past 30 Days (Monthly)', grouped.monthly);
+  renderSectionTable('Past 1 Year (Yearly)', grouped.yearly);
 
-  // Save the generated document
   doc.save(`BP_Report_${patientName.replace(/\s+/g, '_')}.pdf`);
 };
