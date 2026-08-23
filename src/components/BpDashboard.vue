@@ -696,7 +696,28 @@ const buildChart = (rawData: BpReading[]): void => {
 const exportPdfForDoctor = async (): Promise<void> => {
   isLoading.value = true;
   try {
-    // 1. Fetch full 1-year history to guarantee ALL records (Aug 12 to Aug 23) are retrieved
+    // 1. Capture the chart canvas BEFORE async network calls run
+    let chartBase64: string | undefined = undefined;
+    const canvasElement = document.querySelector('canvas') as HTMLCanvasElement;
+
+    if (canvasElement && canvasElement.width > 0 && canvasElement.height > 0) {
+      // Create a temporary canvas to apply a white background so Chart.js lines remain visible in PDF
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = canvasElement.width;
+      tempCanvas.height = canvasElement.height;
+      const ctx = tempCanvas.getContext('2d');
+
+      if (ctx) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+        ctx.drawImage(canvasElement, 0, 0);
+        chartBase64 = tempCanvas.toDataURL('image/png');
+      } else {
+        chartBase64 = canvasElement.toDataURL('image/png');
+      }
+    }
+
+    // 2. Fetch complete 1-year history for PDF tables
     const end = new Date();
     const start = new Date();
     start.setFullYear(end.getFullYear() - 1);
@@ -707,14 +728,7 @@ const exportPdfForDoctor = async (): Promise<void> => {
     const response = await bpService.getReadingsByRange(startStr, endStr);
     const fullLogs: BpReading[] = response.data || [];
 
-    // 2. Capture active chart image
-    let chartBase64: string | undefined = undefined;
-    const canvasElement = document.querySelector('canvas') as HTMLCanvasElement;
-    if (canvasElement) {
-      chartBase64 = canvasElement.toDataURL('image/png');
-    }
-
-    // 3. Generate PDF with the full log dataset
+    // 3. Generate PDF with the captured chart and complete logs
     generateBpPdf(fullLogs, currentUser.value, chartBase64);
   } catch (err: any) {
     globalError.value = 'Failed to fetch complete logs for PDF generation.';
