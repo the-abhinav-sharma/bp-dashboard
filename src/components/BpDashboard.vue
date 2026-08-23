@@ -164,7 +164,8 @@
             >
               {{ period }}
             </button>
-            <button 
+          </div>
+          <button 
               @click="exportPdfForDoctor" 
               :disabled="isExporting || !recentLogs || recentLogs.length === 0"
               class="btn-export-pdf"
@@ -173,7 +174,6 @@
               <i v-else class="fas fa-spinner fa-spin mr-2"></i>
               {{ isExporting ? 'Generating PDF...' : 'Export PDF for Doctor' }}
             </button>
-          </div>
         </div>
 
         <div class="chart-container">
