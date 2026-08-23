@@ -166,14 +166,14 @@
             </button>
           </div>
           <button 
-            @click="exportPdfForDoctor" 
-            :disabled="isExporting || !recentLogs || recentLogs.length === 0"
-            class="w-full sm:w-auto inline-flex items-center justify-center px-5 py-3 sm:py-2.5 text-sm sm:text-base font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 rounded-lg shadow-sm transition-colors min-h-[44px]"
-          >
-            <i v-if="!isExporting" class="fas fa-file-pdf mr-2"></i>
-            <i v-else class="fas fa-spinner fa-spin mr-2"></i>
-            {{ isExporting ? 'Generating PDF...' : 'Export PDF for Doctor' }}
-          </button>
+              @click="exportPdfForDoctor" 
+              :disabled="isExporting || !recentLogs || recentLogs.length === 0"
+              class="btn-export-pdf"
+            >
+              <i v-if="!isExporting" class="fas fa-file-pdf mr-2"></i>
+              <i v-else class="fas fa-spinner fa-spin mr-2"></i>
+              {{ isExporting ? 'Generating PDF...' : 'Export PDF for Doctor' }}
+            </button>
         </div>
 
         <div class="chart-container">
@@ -1312,24 +1312,39 @@ onMounted(() => {
   .btn-export-pdf {
   display: inline-flex;
   align-items: center;
-  background-color: #2563eb;
+  justify-content: center;
+  padding: 0.75rem 1.25rem;
+  font-size: 0.95rem;
+  font-weight: 600;
   color: #ffffff;
-  padding: 0.5rem 1rem;
-  border-radius: 0.375rem;
-  font-weight: 500;
-  font-size: 0.875rem;
+  background-color: #2563eb;
   border: none;
+  border-radius: 0.5rem;
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: all 0.2s ease-in-out;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  min-height: 44px; /* Touch target standard for mobile */
+  width: auto;
 }
 
-.btn-export-pdf:hover {
+/* Hover & Disabled States */
+.btn-export-pdf:hover:not(:disabled) {
   background-color: #1d4ed8;
 }
 
 .btn-export-pdf:disabled {
-  opacity: 0.5;
+  opacity: 0.65;
   cursor: not-allowed;
 }
+
+/* Mobile Responsiveness */
+@media (max-width: 640px) {
+  .btn-export-pdf {
+    width: 100%; /* Spans neatly across mobile screens */
+    padding: 0.875rem 1rem;
+    font-size: 1rem;
+  }
+}
+
 }
 </style>
