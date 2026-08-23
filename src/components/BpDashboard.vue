@@ -854,7 +854,7 @@ const exportPdfForDoctor = async (): Promise<void> => {
           plugins: [whiteBackgroundPlugin]
         });
 
-        chartBase64 = offscreenCanvas.toDataURL('image/png', 1.0);
+        chartBase64 = offscreenCanvas.toDataURL('image/jpeg', 0.8);
         chart.destroy();
       }
     }

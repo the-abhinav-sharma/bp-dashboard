@@ -73,13 +73,23 @@ export const generateBpPdf = (
   currentY += 10;
 
   // Render Visual Chart if available
-  if (chartBase64Image) {
+if (chartBase64Image) {
     doc.setFontSize(11);
     doc.setTextColor(15, 23, 42);
     doc.text('Blood Pressure Trends & Analysis Chart', 14, currentY);
     currentY += 4;
 
-    doc.addImage(chartBase64Image, 'PNG', 14, currentY, 180, 70);
+    // Use 'JPEG' and pass compression alias 'FAST' to keep file size tiny
+    doc.addImage(
+      chartBase64Image, 
+      'JPEG', 
+      14, 
+      currentY, 
+      180, 
+      70, 
+      undefined, 
+      'FAST'
+    );
     currentY += 76;
   }
 
