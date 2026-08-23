@@ -182,6 +182,54 @@
             <p>No health logs recorded for this timeframe.</p>
           </div>
         </div>
+
+        <!-- Summary Statistics Cards Below Chart -->
+        <div class="period-summary-bar">
+          <div class="summary-card sys">
+            <span class="summary-label">Avg Systolic</span>
+            <div class="summary-value-group">
+              <span class="summary-value">{{ periodAverages.systolic }}</span>
+              <span class="summary-unit">mmHg</span>
+            </div>
+            <span
+              v-if="periodAverages.systolic !== '--'"
+              class="summary-badge"
+              :style="{
+                backgroundColor: periodAverages.sysStatus.bg,
+                color: periodAverages.sysStatus.color
+              }"
+            >
+              {{ periodAverages.sysStatus.label }}
+            </span>
+          </div>
+
+          <div class="summary-card dia">
+            <span class="summary-label">Avg Diastolic</span>
+            <div class="summary-value-group">
+              <span class="summary-value">{{ periodAverages.diastolic }}</span>
+              <span class="summary-unit">mmHg</span>
+            </div>
+            <span
+              v-if="periodAverages.diastolic !== '--'"
+              class="summary-badge"
+              :style="{
+                backgroundColor: periodAverages.diaStatus.bg,
+                color: periodAverages.diaStatus.color
+              }"
+            >
+              {{ periodAverages.diaStatus.label }}
+            </span>
+          </div>
+
+          <div class="summary-card pulse">
+            <span class="summary-label">Avg Pulse</span>
+            <div class="summary-value-group">
+              <span class="summary-value">{{ periodAverages.pulse }}</span>
+              <span class="summary-unit">BPM</span>
+            </div>
+            <span class="summary-subtext">Overall Heart Rate</span>
+          </div>
+        </div>
       </section>
     </div>
 
@@ -288,7 +336,6 @@ const filterOptions: FilterPeriod[] = ['daily', 'weekly', 'monthly', 'yearly'];
 const activePeriod = ref<FilterPeriod>('weekly');
 const recentLogs = ref<BpReading[]>([]);
 
-// Local Time Formatting (Prevents UTC offset date-shift issues)
 const getTodayDate = (): string => {
   const now = new Date();
   const year = now.getFullYear();
@@ -360,6 +407,35 @@ const classifyBp = (systolic: number | null, diastolic: number | null): BpStatus
 };
 
 const currentStatus = computed<BpStatus>(() => classifyBp(form.systolic, form.diastolic));
+
+// Calculate Averages for Active Timeframe
+const periodAverages = computed(() => {
+  if (!recentLogs.value || !recentLogs.value.length) {
+    return {
+      systolic: '--',
+      diastolic: '--',
+      pulse: '--',
+      sysStatus: classifyValue(null, 'systolic'),
+      diaStatus: classifyValue(null, 'diastolic')
+    };
+  }
+
+  const validSys = recentLogs.value.filter(r => typeof r.systolic === 'number' && r.systolic > 0);
+  const validDia = recentLogs.value.filter(r => typeof r.diastolic === 'number' && r.diastolic > 0);
+  const validPulse = recentLogs.value.filter(r => typeof r.pulse === 'number' && r.pulse > 0);
+
+  const avgSys = validSys.length ? Math.round(validSys.reduce((s, r) => s + (r.systolic || 0), 0) / validSys.length) : null;
+  const avgDia = validDia.length ? Math.round(validDia.reduce((s, r) => s + (r.diastolic || 0), 0) / validDia.length) : null;
+  const avgPulse = validPulse.length ? Math.round(validPulse.reduce((s, r) => s + (r.pulse || 0), 0) / validPulse.length) : null;
+
+  return {
+    systolic: avgSys !== null ? avgSys : '--',
+    diastolic: avgDia !== null ? avgDia : '--',
+    pulse: avgPulse !== null ? avgPulse : '--',
+    sysStatus: classifyValue(avgSys, 'systolic'),
+    diaStatus: classifyValue(avgDia, 'diastolic')
+  };
+});
 
 const chartOptions: ChartOptions<'line'> = {
   responsive: true,
@@ -974,6 +1050,79 @@ onMounted(() => {
 .empty-icon {
   font-size: 32px;
   margin-bottom: 8px;
+}
+
+/* Summary Bar Below Chart */
+.period-summary-bar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.summary-card {
+  background: #f8fafc;
+  padding: 12px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid #e2e8f0;
+}
+
+.summary-card.sys {
+  border-top: 3px solid #ef4444;
+}
+
+.summary-card.dia {
+  border-top: 3px solid #2563eb;
+}
+
+.summary-card.pulse {
+  border-top: 3px solid #0d9488;
+}
+
+.summary-label {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.summary-value-group {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.summary-value {
+  font-size: 20px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.summary-unit {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.summary-badge {
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  margin-top: 4px;
+  text-transform: uppercase;
+}
+
+.summary-subtext {
+  font-size: 10px;
+  color: #94a3b8;
+  margin-top: 4px;
 }
 
 /* Table */
