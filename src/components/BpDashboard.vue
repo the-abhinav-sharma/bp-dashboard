@@ -698,38 +698,112 @@ const buildChart = (rawData: BpReading[]): void => {
 const exportPdfForDoctor = async (): Promise<void> => {
   isExporting.value = true;
   try {
-    // 1. Capture the chart canvas BEFORE async network calls run
-    let chartBase64: string | undefined = undefined;
-    const canvasElement = document.querySelector('canvas') as HTMLCanvasElement;
 
-    if (canvasElement && canvasElement.width > 0 && canvasElement.height > 0) {
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = canvasElement.width;
-      tempCanvas.height = canvasElement.height;
-      const ctx = tempCanvas.getContext('2d');
+    const response = await bpService.getAllReadings();
+    const fullLogs: BpReading[] = response.data || [];
+
+    let chartBase64: string | undefined = undefined;
+
+    // 2. Build an off-screen Chart instance using full logs (grouped by month or date)
+    if (fullLogs.length > 0) {
+      const offscreenCanvas = document.createElement('canvas');
+      offscreenCanvas.width = 800;
+      offscreenCanvas.height = 350;
+      const ctx = offscreenCanvas.getContext('2d');
 
       if (ctx) {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-        ctx.drawImage(canvasElement, 0, 0);
-        chartBase64 = tempCanvas.toDataURL('image/png');
-      } else {
-        chartBase64 = canvasElement.toDataURL('image/png');
+        // Group full dataset chronologically for the yearly chart
+        const timeOrder: Record<string, number> = { MORNING: 1, AFTERNOON: 2, EVENING: 3 };
+        const sortedFullData = [...fullLogs].sort((a, b) => {
+          if (a.readingDate !== b.readingDate) return a.readingDate.localeCompare(b.readingDate);
+          return (timeOrder[a.timeOfDay] ?? 4) - (timeOrder[b.timeOfDay] ?? 4);
+        });
+
+        // Group by Month or Day depending on dataset size
+        const groupedByDay = new Map<string, GroupBucket>();
+        sortedFullData.forEach((item) => {
+          if (!groupedByDay.has(item.readingDate)) {
+            groupedByDay.set(item.readingDate, { sys: [], dia: [], pulse: [] });
+          }
+          const group = groupedByDay.get(item.readingDate)!;
+          if (typeof item.systolic === 'number') group.sys.push(item.systolic);
+          if (typeof item.diastolic === 'number') group.dia.push(item.diastolic);
+          if (typeof item.pulse === 'number') group.pulse.push(item.pulse);
+        });
+
+        const sortedDates = Array.from(groupedByDay.keys()).sort((a, b) => a.localeCompare(b));
+        const labels: string[] = [];
+        const sysData: number[] = [];
+        const diaData: number[] = [];
+        const pulseData: number[] = [];
+
+        sortedDates.forEach((dateStr) => {
+          const values = groupedByDay.get(dateStr)!;
+          const [year, month, day] = dateStr.split('-').map(Number);
+          const date = new Date(year, month - 1, day);
+          labels.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+          sysData.push(avg(values.sys));
+          diaData.push(avg(values.dia));
+          pulseData.push(avg(values.pulse));
+        });
+
+        // Render chart off-screen
+        const chart = new ChartJS(ctx, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [
+              {
+                label: 'Systolic (mmHg)',
+                data: sysData,
+                borderColor: '#ef4444',
+                backgroundColor: '#ef4444',
+                pointRadius: 3,
+                tension: 0.3
+              },
+              {
+                label: 'Diastolic (mmHg)',
+                data: diaData,
+                borderColor: '#2563eb',
+                backgroundColor: '#2563eb',
+                pointRadius: 3,
+                tension: 0.3
+              },
+              {
+                label: 'Pulse (BPM)',
+                data: pulseData,
+                borderColor: '#0d9488',
+                backgroundColor: '#0d9488',
+                borderDash: [4, 4],
+                pointRadius: 3,
+                tension: 0.3
+              }
+            ]
+          },
+          options: {
+            responsive: false,
+            animation: false,
+            plugins: { legend: { display: true, position: 'top' } }
+          }
+        });
+
+        // Create canvas with white background
+        const finalCanvas = document.createElement('canvas');
+        finalCanvas.width = 800;
+        finalCanvas.height = 350;
+        const finalCtx = finalCanvas.getContext('2d');
+        if (finalCtx) {
+          finalCtx.fillStyle = '#ffffff';
+          finalCtx.fillRect(0, 0, 800, 350);
+          finalCtx.drawImage(offscreenCanvas, 0, 0);
+          chartBase64 = finalCanvas.toDataURL('image/png');
+        }
+
+        chart.destroy(); // Clean up instance memory
       }
     }
 
-    // 2. Fetch complete 1-year history for PDF tables
-    const end = new Date();
-    const start = new Date();
-    start.setFullYear(end.getFullYear() - 1);
-
-    const startStr = formatDateString(start);
-    const endStr = formatDateString(end);
-
-    const response = await bpService.getReadingsByRange(startStr, endStr);
-    const fullLogs: BpReading[] = response.data || [];
-
-    // 3. Generate PDF without touching dashboard state (recentLogs)
+    // 3. Generate PDF document
     generateBpPdf(fullLogs, currentUser.value, chartBase64);
   } catch (err: any) {
     globalError.value = 'Failed to fetch complete logs for PDF generation.';
