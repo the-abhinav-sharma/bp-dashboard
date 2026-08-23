@@ -475,7 +475,6 @@ const chartOptions: ChartOptions<'line'> = {
   }
 };
 
-
 const handleFormSubmit = async (): Promise<void> => {
   globalError.value = '';
   try {
@@ -502,6 +501,13 @@ const setPeriod = (period: FilterPeriod): void => {
   fetchDashboardData(period);
 };
 
+const formatDateString = (d: Date) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
 const fetchDashboardData = async (period: FilterPeriod): Promise<void> => {
   isLoading.value = true;
   globalError.value = '';
@@ -513,13 +519,6 @@ const fetchDashboardData = async (period: FilterPeriod): Promise<void> => {
   else if (period === 'weekly') start.setDate(end.getDate() - 7);
   else if (period === 'monthly') start.setMonth(end.getMonth() - 1);
   else if (period === 'yearly') start.setFullYear(end.getFullYear() - 1);
-
-  const formatDateString = (d: Date) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  };
 
   const startStr = formatDateString(start);
   const endStr = formatDateString(end);
@@ -694,20 +693,34 @@ const buildChart = (rawData: BpReading[]): void => {
   };
 };
 
-// Inside your Vue setup / script section
-const exportPdfForDoctor = () => {
-  // 1. Pass your component's reactive array variable (e.g., logs.value or bpLogs.value)
-  const dataToExport = recentLogs.value; // <--- REPLACE 'logs.value' WITH YOUR ACTUAL VUE REF/STATE VARIABLE
+const exportPdfForDoctor = async (): Promise<void> => {
+  isLoading.value = true;
+  try {
+    // 1. Fetch full 1-year history to guarantee ALL records (Aug 12 to Aug 23) are retrieved
+    const end = new Date();
+    const start = new Date();
+    start.setFullYear(end.getFullYear() - 1);
 
-  // 2. Capture chart image canvas if present
-  let chartBase64: string | undefined = undefined;
-  const canvasElement = document.querySelector('canvas') as HTMLCanvasElement;
-  if (canvasElement) {
-    chartBase64 = canvasElement.toDataURL('image/png');
+    const startStr = formatDateString(start);
+    const endStr = formatDateString(end);
+
+    const response = await bpService.getReadingsByRange(startStr, endStr);
+    const fullLogs: BpReading[] = response.data || [];
+
+    // 2. Capture active chart image
+    let chartBase64: string | undefined = undefined;
+    const canvasElement = document.querySelector('canvas') as HTMLCanvasElement;
+    if (canvasElement) {
+      chartBase64 = canvasElement.toDataURL('image/png');
+    }
+
+    // 3. Generate PDF with the full log dataset
+    generateBpPdf(fullLogs, currentUser.value, chartBase64);
+  } catch (err: any) {
+    globalError.value = 'Failed to fetch complete logs for PDF generation.';
+  } finally {
+    isLoading.value = false;
   }
-
-  // 3. Trigger PDF Generation
-  generateBpPdf(dataToExport, 'Patient', chartBase64);
 };
 
 onMounted(() => {
