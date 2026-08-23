@@ -14,20 +14,26 @@ export interface BpLog {
 // Group logs into Weekly, Monthly, and Yearly segments
 const groupLogsByTimeframe = (logs: BpLog[]) => {
   const now = new Date();
-  
-  const oneWeekAgo = new Date();
+
+  // Create isolated dates so mutations don't chain together
+  const oneWeekAgo = new Date(now.getTime());
   oneWeekAgo.setDate(now.getDate() - 7);
-  
-  const oneMonthAgo = new Date();
-  oneMonthAgo.setMonth(now.getMonth() - 1);
-  
-  const oneYearAgo = new Date();
-  oneYearAgo.setFullYear(now.getFullYear() - 1);
+
+  const oneMonthAgo = new Date(now.getTime());
+  oneMonthAgo.setDate(now.getDate() - 30); // 30 days back
+
+  const oneYearAgo = new Date(now.getTime());
+  oneYearAgo.setDate(now.getDate() - 365); // 365 days back
+
+  // Sort logs in descending order (newest first)
+  const sortedLogs = [...logs].sort(
+    (a, b) => new Date(b.readingDate).getTime() - new Date(a.readingDate).getTime()
+  );
 
   return {
-    weekly: logs.filter((l) => new Date(l.readingDate) >= oneWeekAgo),
-    monthly: logs.filter((l) => new Date(l.readingDate) >= oneMonthAgo),
-    yearly: logs.filter((l) => new Date(l.readingDate) >= oneYearAgo),
+    weekly: sortedLogs.filter((l) => new Date(l.readingDate) >= oneWeekAgo),
+    monthly: sortedLogs.filter((l) => new Date(l.readingDate) >= oneMonthAgo),
+    yearly: sortedLogs.filter((l) => new Date(l.readingDate) >= oneYearAgo),
   };
 };
 
