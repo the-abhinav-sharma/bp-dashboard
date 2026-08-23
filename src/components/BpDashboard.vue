@@ -698,7 +698,6 @@ const buildChart = (rawData: BpReading[]): void => {
 const exportPdfForDoctor = async (): Promise<void> => {
   isExporting.value = true;
   try {
-    // 1. Fetch complete 1-year history first
     const end = new Date();
     const start = new Date();
     start.setFullYear(end.getFullYear() - 1);
@@ -712,25 +711,24 @@ const exportPdfForDoctor = async (): Promise<void> => {
     let chartBase64: string | undefined = undefined;
 
     if (fullLogs.length > 0) {
-      // 2. Create offscreen canvas with fixed pixel dimensions
+      // 1. Double the pixel width/height (2x resolution for ultra-sharp PDF output)
+      const canvasWidth = 1600;
+      const canvasHeight = 700;
+
       const offscreenCanvas = document.createElement('canvas');
-      offscreenCanvas.width = 800;
-      offscreenCanvas.height = 350;
+      offscreenCanvas.width = canvasWidth;
+      offscreenCanvas.height = canvasHeight;
       const ctx = offscreenCanvas.getContext('2d');
 
       if (ctx) {
-        // Fill white background directly
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, 800, 350);
-
-        // Sort data chronologically
+        // Chronological sort
         const timeOrder: Record<string, number> = { MORNING: 1, AFTERNOON: 2, EVENING: 3 };
         const sortedFullData = [...fullLogs].sort((a, b) => {
-          if (a.readingDate !== b.readingDate) return a.readingDate.localeCompare(b.readingDate);
+          if (a.readingDate !== b.readingDate) return a.readingDate.localeCompare(a.readingDate);
           return (timeOrder[a.timeOfDay] ?? 4) - (timeOrder[b.timeOfDay] ?? 4);
         });
 
-        // Group by day for clean data points
+        // Group by day
         const groupedByDay = new Map<string, GroupBucket>();
         sortedFullData.forEach((item) => {
           if (!groupedByDay.has(item.readingDate)) {
@@ -758,7 +756,10 @@ const exportPdfForDoctor = async (): Promise<void> => {
           pulseData.push(avg(values.pulse));
         });
 
-        // Plugin to ensure background stays solid white behind Chart.js elements
+        // 2. Compute dynamic Y-axis bounds for proper headroom above the highest peak
+        const maxSystolic = sysData.length ? Math.max(...sysData) : 140;
+        const dynamicYMax = Math.max(maxSystolic + 25, 180); // Gives at least 25mmHg top padding
+
         const whiteBackgroundPlugin = {
           id: 'customCanvasBackgroundColor',
           beforeDraw: (chart: any) => {
@@ -770,7 +771,6 @@ const exportPdfForDoctor = async (): Promise<void> => {
           }
         };
 
-        // Render Chart.js explicitly at devicePixelRatio = 1 to prevent display zoom/scaling
         const chart = new ChartJS(ctx, {
           type: 'line',
           data: {
@@ -781,7 +781,9 @@ const exportPdfForDoctor = async (): Promise<void> => {
                 data: sysData,
                 borderColor: '#ef4444',
                 backgroundColor: '#ef4444',
-                pointRadius: 3,
+                borderWidth: 4,
+                pointRadius: 6,
+                pointHoverRadius: 8,
                 tension: 0.3
               },
               {
@@ -789,7 +791,9 @@ const exportPdfForDoctor = async (): Promise<void> => {
                 data: diaData,
                 borderColor: '#2563eb',
                 backgroundColor: '#2563eb',
-                pointRadius: 3,
+                borderWidth: 4,
+                pointRadius: 6,
+                pointHoverRadius: 8,
                 tension: 0.3
               },
               {
@@ -797,29 +801,64 @@ const exportPdfForDoctor = async (): Promise<void> => {
                 data: pulseData,
                 borderColor: '#0d9488',
                 backgroundColor: '#0d9488',
-                borderDash: [4, 4],
-                pointRadius: 3,
+                borderWidth: 4,
+                borderDash: [8, 8],
+                pointRadius: 6,
+                pointHoverRadius: 8,
                 tension: 0.3
               }
             ]
           },
           options: {
             responsive: false,
-            devicePixelRatio: 1, // Fixes display DPI scaling / cropping issue!
+            devicePixelRatio: 2, // Crisp rendering high-DPI output
             animation: false,
             plugins: {
-              legend: { display: true, position: 'top' }
+              legend: {
+                display: true,
+                position: 'top',
+                labels: {
+                  font: { size: 18, weight: 'bold', family: 'sans-serif' },
+                  usePointStyle: true,
+                  padding: 20
+                }
+              }
+            },
+            scales: {
+              y: {
+                min: 40,            // Floor to keep bottom lines readable
+                max: dynamicYMax,    // Ensures top curve never touches the ceiling
+                grid: { color: '#e2e8f0' },
+                ticks: {
+                  stepSize: 20,
+                  font: { size: 16, family: 'sans-serif' },
+                  color: '#475569'
+                },
+                title: {
+                  display: true,
+                  text: 'mmHg / BPM',
+                  font: { size: 16, weight: 'bold', family: 'sans-serif' },
+                  color: '#475569'
+                }
+              },
+              x: {
+                grid: { display: false },
+                ticks: {
+                  font: { size: 14, family: 'sans-serif' },
+                  color: '#475569',
+                  maxRotation: 45
+                }
+              }
             }
           },
           plugins: [whiteBackgroundPlugin]
         });
 
-        chartBase64 = offscreenCanvas.toDataURL('image/png');
+        chartBase64 = offscreenCanvas.toDataURL('image/png', 1.0);
         chart.destroy();
       }
     }
 
-    // 3. Generate PDF
     generateBpPdf(fullLogs, currentUser.value, chartBase64);
   } catch (err: any) {
     globalError.value = 'Failed to fetch complete logs for PDF generation.';
