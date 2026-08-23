@@ -694,23 +694,20 @@ const buildChart = (rawData: BpReading[]): void => {
   };
 };
 
+// Inside your Vue setup / script section
 const exportPdfForDoctor = () => {
-  const dataToExport = recentLogs.value;
+  // 1. Pass your component's reactive array variable (e.g., logs.value or bpLogs.value)
+  const dataToExport = recentLogs.value; // <--- REPLACE 'logs.value' WITH YOUR ACTUAL VUE REF/STATE VARIABLE
 
-  if (!dataToExport || dataToExport.length === 0) {
-    globalError.value = 'No logs available to export.';
-    return;
-  }
-
-  // Grab the canvas element from the DOM (replace 'canvas' with your canvas ID if you have one, e.g. '#bpChart')
+  // 2. Capture chart image canvas if present
   let chartBase64: string | undefined = undefined;
   const canvasElement = document.querySelector('canvas') as HTMLCanvasElement;
-  
   if (canvasElement) {
     chartBase64 = canvasElement.toDataURL('image/png');
   }
 
-  generateBpPdf(dataToExport, currentUser.value, chartBase64);
+  // 3. Trigger PDF Generation
+  generateBpPdf(dataToExport, 'Patient', chartBase64);
 };
 
 onMounted(() => {
