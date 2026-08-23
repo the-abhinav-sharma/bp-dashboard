@@ -167,6 +167,14 @@
           </div>
         </div>
 
+        <button 
+          @click="exportPdfForDoctor" 
+          :disabled="!recentLogs || recentLogs.length === 0"
+          class="btn-export-pdf"
+        >
+          <i class="fas fa-file-pdf mr-2"></i> Export PDF for Doctor
+        </button>
+
         <div class="chart-container">
           <div v-if="isLoading" class="chart-loader">
             <span class="spinner"></span>
@@ -309,6 +317,7 @@ import { useRouter } from 'vue-router';
 import authService from '@/services/authService';
 import bpService from '@/services/bpService';
 import type { BpReading, BpStatus, FilterPeriod, SingleCategory } from '@/types/bp';
+import { generateBpPdf } from '@/services/bpPdfGenerator';
 import {
   Chart as ChartJS,
   Title,
@@ -465,6 +474,7 @@ const chartOptions: ChartOptions<'line'> = {
     }
   }
 };
+
 
 const handleFormSubmit = async (): Promise<void> => {
   globalError.value = '';
@@ -682,6 +692,18 @@ const buildChart = (rawData: BpReading[]): void => {
       }
     ]
   };
+};
+
+const exportPdfForDoctor = () => {
+  // Use recentLogs directly — do NOT mention filteredReadings or readings anywhere here
+  const dataToExport = recentLogs.value;
+
+  if (!dataToExport || dataToExport.length === 0) {
+    globalError.value = 'No logs available to export.';
+    return;
+  }
+
+  generateBpPdf(dataToExport, currentUser.value);
 };
 
 onMounted(() => {
@@ -1254,5 +1276,28 @@ onMounted(() => {
   .chart-container {
     height: 340px;
   }
+
+  .btn-export-pdf {
+  display: inline-flex;
+  align-items: center;
+  background-color: #2563eb;
+  color: #ffffff;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.btn-export-pdf:hover {
+  background-color: #1d4ed8;
+}
+
+.btn-export-pdf:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 }
 </style>
