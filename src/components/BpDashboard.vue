@@ -26,7 +26,7 @@
     <!-- Global Alert Banner -->
     <div v-if="globalError" class="alert alert-error" role="alert">
       <span>{{ globalError }}</span>
-      <button @click="globalError = ''" class="btn-close">&times;</button>
+      <button @click="globalError = ''" class="btn-close" aria-label="Close error message">&times;</button>
     </div>
 
     <div class="dashboard-grid">
@@ -278,7 +278,6 @@ import { Line } from 'vue-chartjs';
 ChartJS.register(Title, Tooltip, Legend, LineElement, CategoryScale, LinearScale, PointElement);
 
 const router = useRouter();
-//const authStore = useAuthStore();
 
 const currentUser = computed(() => authService.getUsername() || 'User');
 const globalError = ref<string>('');
@@ -289,7 +288,14 @@ const filterOptions: FilterPeriod[] = ['daily', 'weekly', 'monthly', 'yearly'];
 const activePeriod = ref<FilterPeriod>('weekly');
 const recentLogs = ref<BpReading[]>([]);
 
-const getTodayDate = (): string => new Date().toISOString().split('T')[0] ?? '';
+// Local Time Formatting (Prevents UTC offset date-shift issues)
+const getTodayDate = (): string => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 const form = reactive<BpReading>({
   systolic: null,
@@ -393,6 +399,7 @@ const handleFormSubmit = async (): Promise<void> => {
     form.systolic = null;
     form.diastolic = null;
     form.pulse = null;
+    form.timeOfDay = 'MORNING';
     form.readingDate = getTodayDate();
     form.notes = '';
 
@@ -421,8 +428,15 @@ const fetchDashboardData = async (period: FilterPeriod): Promise<void> => {
   else if (period === 'monthly') start.setMonth(end.getMonth() - 1);
   else if (period === 'yearly') start.setFullYear(end.getFullYear() - 1);
 
-  const startStr = start.toISOString().split('T')[0] ?? '';
-  const endStr = end.toISOString().split('T')[0] ?? '';
+  const formatDateString = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const startStr = formatDateString(start);
+  const endStr = formatDateString(end);
 
   try {
     const response = await bpService.getReadingsByRange(startStr, endStr);
@@ -512,7 +526,10 @@ const buildChart = (rawData: BpReading[]): void => {
       if (typeof item.pulse === 'number') group.pulse.push(item.pulse);
     });
 
-    groupedByDay.forEach((values, dateStr) => {
+    const sortedDates = Array.from(groupedByDay.keys()).sort((a, b) => a.localeCompare(b));
+
+    sortedDates.forEach(dateStr => {
+      const values = groupedByDay.get(dateStr)!;
       const [year, month, day] = dateStr.split('-').map(Number);
       const date = new Date(year, month - 1, day);
       const formattedLabel = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -538,7 +555,10 @@ const buildChart = (rawData: BpReading[]): void => {
       if (typeof item.pulse === 'number') group.pulse.push(item.pulse);
     });
 
-    groupedByMonth.forEach((values, monthKey) => {
+    const sortedMonths = Array.from(groupedByMonth.keys()).sort((a, b) => a.localeCompare(b));
+
+    sortedMonths.forEach(monthKey => {
+      const values = groupedByMonth.get(monthKey)!;
       const [year, month] = monthKey.split('-').map(Number);
       const date = new Date(year, month - 1, 1);
       const formattedLabel = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
