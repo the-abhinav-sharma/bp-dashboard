@@ -695,7 +695,6 @@ const buildChart = (rawData: BpReading[]): void => {
 };
 
 const exportPdfForDoctor = () => {
-  // Use recentLogs directly — do NOT mention filteredReadings or readings anywhere here
   const dataToExport = recentLogs.value;
 
   if (!dataToExport || dataToExport.length === 0) {
@@ -703,7 +702,15 @@ const exportPdfForDoctor = () => {
     return;
   }
 
-  generateBpPdf(dataToExport, currentUser.value);
+  // Grab the canvas element from the DOM (replace 'canvas' with your canvas ID if you have one, e.g. '#bpChart')
+  let chartBase64: string | undefined = undefined;
+  const canvasElement = document.querySelector('canvas') as HTMLCanvasElement;
+  
+  if (canvasElement) {
+    chartBase64 = canvasElement.toDataURL('image/png');
+  }
+
+  generateBpPdf(dataToExport, currentUser.value, chartBase64);
 };
 
 onMounted(() => {

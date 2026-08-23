@@ -1,115 +1,116 @@
-// utils/bpPdfGenerator.ts
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-// Notice the 'type' keyword added below
-import type { BpReading, TimeOfDay } from '@/types/bp';
 
-// Helper to format TimeOfDay enum to readable text
-const formatTimeOfDay = (timeOfDay: TimeOfDay): string => {
-  switch (timeOfDay) {
-    case 'MORNING':
-      return 'Morning';
-    case 'AFTERNOON':
-      return 'Afternoon';
-    case 'EVENING':
-      return 'Evening';
-    default:
-      return timeOfDay;
-  }
-};
+export interface BpLog {
+  id?: number;
+  systolic: number | null;
+  diastolic: number | null;
+  pulse?: number | null;
+  timeOfDay?: string;
+  readingDate: string | Date;
+  notes?: string;
+}
 
-// Helper for clinical classification
-const getClinicalCategory = (sys: number | null, dia: number | null): string => {
-  if (sys === null || dia === null) return 'Incomplete';
-  if (sys >= 180 || dia >= 120) return 'Critically High';
-  if (sys >= 140 || dia >= 90) return 'Stage 2 High';
-  if (sys >= 130 || dia >= 80) return 'Stage 1 High';
-  if (sys >= 120 && dia < 80) return 'Slightly High';
-  return 'Normal';
+// Group logs into Weekly, Monthly, and Yearly segments
+const groupLogsByTimeframe = (logs: BpLog[]) => {
+  const now = new Date();
+  
+  const oneWeekAgo = new Date();
+  oneWeekAgo.setDate(now.getDate() - 7);
+  
+  const oneMonthAgo = new Date();
+  oneMonthAgo.setMonth(now.getMonth() - 1);
+  
+  const oneYearAgo = new Date();
+  oneYearAgo.setFullYear(now.getFullYear() - 1);
+
+  return {
+    weekly: logs.filter((l) => new Date(l.readingDate) >= oneWeekAgo),
+    monthly: logs.filter((l) => new Date(l.readingDate) >= oneMonthAgo),
+    yearly: logs.filter((l) => new Date(l.readingDate) >= oneYearAgo),
+  };
 };
 
 export const generateBpPdf = (
-  readings: BpReading[],
-  patientName: string = 'Patient'
-): void => {
-  if (readings.length === 0) return;
+  logs: BpLog[],
+  patientName: string = 'Patient',
+  chartBase64Image?: string
+) => {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  let currentY = 15;
 
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-
-  // Filter out null values for valid statistical averages
-  const validSys = readings.filter((r): r is BpReading & { systolic: number } => r.systolic !== null);
-  const validDia = readings.filter((r): r is BpReading & { diastolic: number } => r.diastolic !== null);
-  const validPulse = readings.filter((r): r is BpReading & { pulse: number } => r.pulse !== null);
-
-  const avgSys = validSys.length > 0 
-    ? Math.round(validSys.reduce((sum, r) => sum + r.systolic, 0) / validSys.length) 
-    : '--';
-
-  const avgDia = validDia.length > 0 
-    ? Math.round(validDia.reduce((sum, r) => sum + r.diastolic, 0) / validDia.length) 
-    : '--';
-
-  const avgPulse = validPulse.length > 0 
-    ? Math.round(validPulse.reduce((sum, r) => sum + r.pulse, 0) / validPulse.length) 
-    : '--';
-
-  // 1. Document Header
-  doc.setFontSize(18);
-  doc.setTextColor(33, 37, 41);
-  doc.text('Blood Pressure Summary Report', 40, 50);
+  // Header Banner
+  doc.setFontSize(20);
+  doc.setTextColor(40, 116, 240); // Accent blue
+  doc.text('Blood Pressure Summary Report', 14, currentY);
+  currentY += 8;
 
   doc.setFontSize(10);
-  doc.setTextColor(108, 117, 125);
-  doc.text(`Patient: ${patientName}`, 40, 68);
-  doc.text(`Generated: ${new Date().toLocaleDateString()}`, 40, 80);
-  doc.text(`Total Readings: ${readings.length}`, 40, 92);
+  doc.setTextColor(100);
+  doc.text(`Patient: ${patientName} | Generated: ${new Date().toLocaleDateString()}`, 14, currentY);
+  currentY += 10;
 
-  // 2. Clinical Summary Box
-  doc.setLineWidth(0.5);
-  doc.setDrawColor(222, 226, 230);
-  doc.setFillColor(248, 249, 250);
-  doc.roundedRect(40, 105, 515, 55, 4, 4, 'FD');
+  // 1. Embed Chart Image if provided
+  if (chartBase64Image) {
+    doc.setFontSize(12);
+    doc.setTextColor(0);
+    doc.text('Blood Pressure Trends (Visual Chart)', 14, currentY);
+    currentY += 4;
 
-  doc.setFontSize(11);
-  doc.setTextColor(33, 37, 41);
-  doc.text(`Average BP: ${avgSys}/${avgDia} mmHg`, 55, 137);
-  doc.text(`Average Pulse: ${avgPulse} bpm`, 300, 137);
+    // Add Image (x, y, width, height)
+    doc.addImage(chartBase64Image, 'PNG', 14, currentY, 180, 75);
+    currentY += 82;
+  }
 
-  // 3. Detailed Data Table
-  const tableRows: (string | number)[][] = readings.map((r) => {
-    const bpDisplay = r.systolic !== null && r.diastolic !== null 
-      ? `${r.systolic} / ${r.diastolic}` 
-      : '--';
-    const pulseDisplay = r.pulse !== null ? `${r.pulse} bpm` : '--';
+  // 2. Group Data
+  const grouped = groupLogsByTimeframe(logs);
 
-    return [
-      r.readingDate,
-      formatTimeOfDay(r.timeOfDay),
-      bpDisplay,
-      pulseDisplay,
-      getClinicalCategory(r.systolic, r.diastolic),
-      r.notes || '-'
-    ];
-  });
-
-  autoTable(doc, {
-    startY: 180,
-    head: [['Date', 'Time of Day', 'BP (mmHg)', 'Pulse', 'Category', 'Notes']],
-    body: tableRows,
-    theme: 'striped',
-    headStyles: { fillColor: [41, 128, 185], textColor: 255 },
-    styles: { fontSize: 9, cellPadding: 6 },
-    columnStyles: {
-      0: { cellWidth: 80 },
-      1: { cellWidth: 75 },
-      2: { cellWidth: 75 },
-      3: { cellWidth: 60 },
-      4: { cellWidth: 90 },
-      5: { cellWidth: 'auto' }
+  const renderSectionTable = (title: string, data: BpLog[]) => {
+    // Add page if running out of room
+    if (currentY > 230) {
+      doc.addPage();
+      currentY = 15;
     }
-  });
 
-  // Save the PDF file
-  const fileName = `BP_Report_${patientName.replace(/\s+/g, '_')}.pdf`;
-  doc.save(fileName);
+    doc.setFontSize(13);
+    doc.setTextColor(30, 41, 59);
+    doc.text(`${title} (${data.length} logs)`, 14, currentY);
+    currentY += 4;
+
+    if (data.length === 0) {
+      doc.setFontSize(9);
+      doc.setTextColor(150);
+      doc.text('No readings recorded for this period.', 14, currentY + 4);
+      currentY += 12;
+      return;
+    }
+
+    const tableRows = data.map((log) => [
+  `${new Date(log.readingDate).toLocaleDateString()} ${log.timeOfDay ? `(${log.timeOfDay})` : ''}`,
+  log.systolic && log.diastolic ? `${log.systolic} / ${log.diastolic} mmHg` : '-',
+  log.pulse ? `${log.pulse} bpm` : '-',
+  log.notes || '-',
+]);
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Date & Time', 'BP (Sys/Dia)', 'Pulse', 'Notes']],
+      body: tableRows,
+      theme: 'striped',
+      headStyles: { fillColor: [40, 116, 240] },
+      styles: { fontSize: 8, cellPadding: 2 },
+      margin: { left: 14, right: 14 },
+    });
+
+    // Update Y position for the next table
+    currentY = (doc as any).lastAutoTable.finalY + 10;
+  };
+
+  // Render separate grouped tables
+  renderSectionTable('Past 7 Days (Weekly)', grouped.weekly);
+  renderSectionTable('Past 30 Days (Monthly)', grouped.monthly);
+  renderSectionTable('Past 1 Year (Yearly)', grouped.yearly);
+
+  // Save the generated document
+  doc.save(`BP_Report_${patientName.replace(/\s+/g, '_')}.pdf`);
 };
