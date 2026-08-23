@@ -164,16 +164,17 @@
             >
               {{ period }}
             </button>
+            <button 
+              @click="exportPdfForDoctor" 
+              :disabled="isExporting || !recentLogs || recentLogs.length === 0"
+              class="btn-export-pdf"
+            >
+              <i v-if="!isExporting" class="fas fa-file-pdf mr-2"></i>
+              <i v-else class="fas fa-spinner fa-spin mr-2"></i>
+              {{ isExporting ? 'Generating PDF...' : 'Export PDF for Doctor' }}
+            </button>
           </div>
         </div>
-
-        <button 
-          @click="exportPdfForDoctor" 
-          :disabled="!recentLogs || recentLogs.length === 0"
-          class="btn-export-pdf"
-        >
-          <i class="fas fa-file-pdf mr-2"></i> Export PDF for Doctor
-        </button>
 
         <div class="chart-container">
           <div v-if="isLoading" class="chart-loader">
@@ -344,6 +345,7 @@ const isSubmitting = ref<boolean>(false);
 const filterOptions: FilterPeriod[] = ['daily', 'weekly', 'monthly', 'yearly'];
 const activePeriod = ref<FilterPeriod>('weekly');
 const recentLogs = ref<BpReading[]>([]);
+const isExporting = ref<boolean>(false);
 
 const getTodayDate = (): string => {
   const now = new Date();
@@ -694,14 +696,13 @@ const buildChart = (rawData: BpReading[]): void => {
 };
 
 const exportPdfForDoctor = async (): Promise<void> => {
-  isLoading.value = true;
+  isExporting.value = true;
   try {
     // 1. Capture the chart canvas BEFORE async network calls run
     let chartBase64: string | undefined = undefined;
     const canvasElement = document.querySelector('canvas') as HTMLCanvasElement;
 
     if (canvasElement && canvasElement.width > 0 && canvasElement.height > 0) {
-      // Create a temporary canvas to apply a white background so Chart.js lines remain visible in PDF
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = canvasElement.width;
       tempCanvas.height = canvasElement.height;
@@ -728,12 +729,12 @@ const exportPdfForDoctor = async (): Promise<void> => {
     const response = await bpService.getReadingsByRange(startStr, endStr);
     const fullLogs: BpReading[] = response.data || [];
 
-    // 3. Generate PDF with the captured chart and complete logs
+    // 3. Generate PDF without touching dashboard state (recentLogs)
     generateBpPdf(fullLogs, currentUser.value, chartBase64);
   } catch (err: any) {
     globalError.value = 'Failed to fetch complete logs for PDF generation.';
   } finally {
-    isLoading.value = false;
+    isExporting.value = false;
   }
 };
 
