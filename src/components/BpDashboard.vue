@@ -758,7 +758,7 @@ const exportPdfForDoctor = async (): Promise<void> => {
 
         // 2. Compute dynamic Y-axis bounds for proper headroom above the highest peak
         const maxSystolic = sysData.length ? Math.max(...sysData) : 140;
-        const dynamicYMax = Math.max(maxSystolic + 25, 180); // Gives at least 25mmHg top padding
+        const dynamicYMax = Math.max(maxSystolic + 25, 160); // Gives at least 25mmHg top padding
 
         const whiteBackgroundPlugin = {
           id: 'customCanvasBackgroundColor',
@@ -826,7 +826,7 @@ const exportPdfForDoctor = async (): Promise<void> => {
             },
             scales: {
               y: {
-                min: 40,            // Floor to keep bottom lines readable
+                min: 60,            // Floor to keep bottom lines readable
                 max: dynamicYMax,    // Ensures top curve never touches the ceiling
                 grid: { color: '#e2e8f0' },
                 ticks: {
