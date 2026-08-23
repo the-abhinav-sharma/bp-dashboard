@@ -166,14 +166,14 @@
             </button>
           </div>
           <button 
-              @click="exportPdfForDoctor" 
-              :disabled="isExporting || !recentLogs || recentLogs.length === 0"
-              class="btn-export-pdf"
-            >
-              <i v-if="!isExporting" class="fas fa-file-pdf mr-2"></i>
-              <i v-else class="fas fa-spinner fa-spin mr-2"></i>
-              {{ isExporting ? 'Generating PDF...' : 'Export PDF for Doctor' }}
-            </button>
+            @click="exportPdfForDoctor" 
+            :disabled="isExporting || !recentLogs || recentLogs.length === 0"
+            class="w-full sm:w-auto inline-flex items-center justify-center px-5 py-3 sm:py-2.5 text-sm sm:text-base font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 rounded-lg shadow-sm transition-colors min-h-[44px]"
+          >
+            <i v-if="!isExporting" class="fas fa-file-pdf mr-2"></i>
+            <i v-else class="fas fa-spinner fa-spin mr-2"></i>
+            {{ isExporting ? 'Generating PDF...' : 'Export PDF for Doctor' }}
+          </button>
         </div>
 
         <div class="chart-container">
