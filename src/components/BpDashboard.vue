@@ -698,28 +698,39 @@ const buildChart = (rawData: BpReading[]): void => {
 const exportPdfForDoctor = async (): Promise<void> => {
   isExporting.value = true;
   try {
+    // 1. Fetch complete 1-year history first
+    const end = new Date();
+    const start = new Date();
+    start.setFullYear(end.getFullYear() - 1);
 
-    const response = await bpService.getAllReadings();
+    const startStr = formatDateString(start);
+    const endStr = formatDateString(end);
+
+    const response = await bpService.getReadingsByRange(startStr, endStr);
     const fullLogs: BpReading[] = response.data || [];
 
     let chartBase64: string | undefined = undefined;
 
-    // 2. Build an off-screen Chart instance using full logs (grouped by month or date)
     if (fullLogs.length > 0) {
+      // 2. Create offscreen canvas with fixed pixel dimensions
       const offscreenCanvas = document.createElement('canvas');
       offscreenCanvas.width = 800;
       offscreenCanvas.height = 350;
       const ctx = offscreenCanvas.getContext('2d');
 
       if (ctx) {
-        // Group full dataset chronologically for the yearly chart
+        // Fill white background directly
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, 800, 350);
+
+        // Sort data chronologically
         const timeOrder: Record<string, number> = { MORNING: 1, AFTERNOON: 2, EVENING: 3 };
         const sortedFullData = [...fullLogs].sort((a, b) => {
           if (a.readingDate !== b.readingDate) return a.readingDate.localeCompare(b.readingDate);
           return (timeOrder[a.timeOfDay] ?? 4) - (timeOrder[b.timeOfDay] ?? 4);
         });
 
-        // Group by Month or Day depending on dataset size
+        // Group by day for clean data points
         const groupedByDay = new Map<string, GroupBucket>();
         sortedFullData.forEach((item) => {
           if (!groupedByDay.has(item.readingDate)) {
@@ -747,7 +758,19 @@ const exportPdfForDoctor = async (): Promise<void> => {
           pulseData.push(avg(values.pulse));
         });
 
-        // Render chart off-screen
+        // Plugin to ensure background stays solid white behind Chart.js elements
+        const whiteBackgroundPlugin = {
+          id: 'customCanvasBackgroundColor',
+          beforeDraw: (chart: any) => {
+            const { ctx, width, height } = chart;
+            ctx.save();
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, width, height);
+            ctx.restore();
+          }
+        };
+
+        // Render Chart.js explicitly at devicePixelRatio = 1 to prevent display zoom/scaling
         const chart = new ChartJS(ctx, {
           type: 'line',
           data: {
@@ -782,28 +805,21 @@ const exportPdfForDoctor = async (): Promise<void> => {
           },
           options: {
             responsive: false,
+            devicePixelRatio: 1, // Fixes display DPI scaling / cropping issue!
             animation: false,
-            plugins: { legend: { display: true, position: 'top' } }
-          }
+            plugins: {
+              legend: { display: true, position: 'top' }
+            }
+          },
+          plugins: [whiteBackgroundPlugin]
         });
 
-        // Create canvas with white background
-        const finalCanvas = document.createElement('canvas');
-        finalCanvas.width = 800;
-        finalCanvas.height = 350;
-        const finalCtx = finalCanvas.getContext('2d');
-        if (finalCtx) {
-          finalCtx.fillStyle = '#ffffff';
-          finalCtx.fillRect(0, 0, 800, 350);
-          finalCtx.drawImage(offscreenCanvas, 0, 0);
-          chartBase64 = finalCanvas.toDataURL('image/png');
-        }
-
-        chart.destroy(); // Clean up instance memory
+        chartBase64 = offscreenCanvas.toDataURL('image/png');
+        chart.destroy();
       }
     }
 
-    // 3. Generate PDF document
+    // 3. Generate PDF
     generateBpPdf(fullLogs, currentUser.value, chartBase64);
   } catch (err: any) {
     globalError.value = 'Failed to fetch complete logs for PDF generation.';
